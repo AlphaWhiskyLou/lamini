@@ -1,0 +1,1 @@
+{"id": "seed_task_0", "name": "object_classification", "instruction": "classify input object to one of the ten classes", "instances": [{"input": "Object: Man\nCategory:", "output": " Human\n"},{"input": "Object: Lemon tree\nCategory:", "output": " High Plant\n"}], "is_classification": true}

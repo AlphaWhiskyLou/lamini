@@ -119,7 +119,7 @@ def parse(string):
 
 
 def load_seed_dataset():
-    return load_questions(path="seed_tasks.jsonl", key="instruction")
+    return load_questions(path="./custom_data/seed_tasks.jsonl", key="instruction")
 
 
 def load_questions(path, key="question"):
@@ -142,7 +142,7 @@ class QuestionAndResponse(Type):
 
 
 def load_seed_instances():
-    return load_questions_and_answers("seed_tasks.jsonl")
+    return load_questions_and_answers("./custom_data/seed_tasks.jsonl")
 
 def load_questions_and_answers(path, question_key="instruction", answer_key="output"):
     questions_and_answers = []
