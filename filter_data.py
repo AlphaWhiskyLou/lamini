@@ -4,7 +4,7 @@ from llama import Type, Context, LLM
 
 from llama.error.error import APIError as LlamaAPIError
 
-import time
+from datetime import datetime
 import jsonlines
 import random
 import argparse
@@ -14,74 +14,92 @@ import os
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="Lamini", description="Generates data for LLM instruction tuning"
+        prog="Lamini", description="Filters data for LLM instruction tuning"
     )
 
     parser.add_argument(
-        "-c", "--count", default=100, help="The number of examples to generate."
+        "-c", "--count", default=100, help="The number of examples to filter."
     )
     parser.add_argument(
         "-b",
         "--batch-size",
         default=10,
-        help="The number of examples to generate in a batch.",
+        help="The number of examples to filter in a batch.",
     )
-    parser.add_argument(
-        "-r", "--response_data", default=False, help="Whether to use seed data as examples for response generation.", type=bool
-    )
+    # parser.add_argument(
+    #     "-r", "--response_data", default=False, help="Whether to use seed data as examples for data filtering.", type=bool
+    # )
 
     arguments = vars(parser.parse_args())
 
     total_examples = int(arguments["count"])
     batch_size = int(arguments["batch_size"])
-    add_response_data = bool(arguments["response_data"])
+    # add_response_data = int(arguments["response_data"])
 
+    start = datetime.now()
+    print(f"Start Time: {start}")
     for count in range(0, total_examples, batch_size):
+    # for count in range(142, total_examples, batch_size):
         if count + batch_size > total_examples:
             batch_size = total_examples - count
         print(f"Processing index {count} out of {total_examples} using batch size {batch_size}")
-        generate_questions(start_index=count, batch_size=batch_size)
-        generate_responses(index=count, batch_size=batch_size, add_response_data=add_response_data)
+        filter_data(start_index=count, batch_size=batch_size)
+        # filter_data(start_index=count, batch_size=batch_size, add_response_data=add_response_data)
+    end = datetime.now()
+    print(f"End Time: {end}")
+    print(f"Total Time: {end - start}")
 
 
 class Question(Type):
     question: str = Context("a question")
 
 
+class IsValid(Type):
+    # is_valid: str = Context("a boolean, 'True' if this is a valid question and 'False' otherwise")
+    # is_valid: str = Context("True if this is a valid question and False otherwise")
+    # is_valid_question: str = Context("Whether or not the above question is valid, 'True' or 'False'")
+    is_valid_question: str = Context("Whether or not the above question is valid, True or False")
+
+
 class NovelQuestion(Type):
     question: str = Context("a novel question, with a radically different subject")
 
 
-def generate_questions(start_index, batch_size):
+def filter_data(start_index, batch_size):
+# def filter_data(start_index, batch_size, add_response_data=False):
 
-    with open("data/questions.jsonl", "a") as questions_file:
+    # with open("data/filtered_deduped_lamini_dataset.jsonl", "w") as questions_file:
+    with open("data/filtered_1_questions.jsonl", "a") as questions_file:
         writer = jsonlines.Writer(questions_file, flush=True)
 
         llm = LLM(name="generate-lamini")
 
-        seed_instructions = list(load_seed_dataset())
+        # if add_response_data:
+        #     seed_instructions = list(load_seed_instances())
+        #     llm.add_data(make_valid_pairs(seed_instructions))
 
-        llm.add_data(make_pairs(seed_instructions))
+        # dataset = load_dataset()
+        dataset = list(load_questions(path="data/1_questions.jsonl"))
 
         for index in range(start_index, start_index + batch_size):
-            instruction = seed_instructions[index % len(seed_instructions)]
-            print("====== Seed Question =====\n", instruction)
-            novel_question = get_question(llm, instruction)
+            datum = dataset[index]
+            print(f"====== Datum =====\n{datum}")
+            is_valid = filter_datum(llm, datum)
+            print(f"Is Valid: {is_valid}")
 
-            novel_question.question = parse(novel_question.question)
-            print("===== Novel Question =====\n", novel_question)
-            writer.write(novel_question.dict())
+            if process_bool(is_valid.is_valid_question):
+                writer.write(datum.dict())
 
-def get_question(llm, instruction):
+
+def filter_datum(llm, datum):
 
     attempts = 5
 
-    for i in range(attempts):
+    for _ in range(attempts):
         try:
             return llm(
-                input=instruction,
-                output_type=NovelQuestion,
-                temperature=0.7,
+                input=datum,
+                output_type=IsValid,
                 model_name="lamini/open",
                 max_tokens=32,
             )
@@ -90,6 +108,22 @@ def get_question(llm, instruction):
 
     raise RuntimeError("Too many Lamini API errors.")
 
+
+def process_bool(llm_output):
+    processed_llm_output = llm_output.split('\n')[0]
+    if processed_llm_output.lower() == 'true':
+        return True
+    else:
+        return False
+
+
+def make_valid_pairs(seed_instructions):
+    pairs = []
+    for seed in seed_instructions:
+        pairs.append([seed[0], IsValid(is_valid_question='True')])
+        pairs.append([Question(question=seed[1].response), IsValid(is_valid_question='False')])
+
+    return pairs
 
 
 def make_pairs(seed_instructions):
@@ -119,14 +153,14 @@ def parse(string):
 
 
 def load_seed_dataset():
-    return load_questions(path="./custom_data/seed_tasks.jsonl", key="instruction")
+    return load_questions(path="seed_tasks.jsonl", key="instruction")
 
 
 def load_questions(path, key="question"):
     with open(path) as questions_file:
         reader = jsonlines.Reader(questions_file)
 
-        for index, line in enumerate(reader):
+        for _, line in enumerate(reader):
             yield Question(
                 question=line[key],
             )
@@ -142,7 +176,7 @@ class QuestionAndResponse(Type):
 
 
 def load_seed_instances():
-    return load_questions_and_answers("./custom_data/seed_tasks.jsonl")
+    return load_questions_and_answers("seed_tasks.jsonl")
 
 def load_questions_and_answers(path, question_key="instruction", answer_key="output"):
     questions_and_answers = []
