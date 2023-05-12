@@ -53,6 +53,11 @@ def get_position_data():
 
 position_parse_llm.add_data(get_position_data())
 
+position_parse_llm.improve(on="object_count", to="only a number")
+position_parse_llm.improve(on="object_description", to="only generate a description of the object or expand on the description of the object")
+position_parse_llm.improve(on="object_relative_position", to="only choose from left, right, middle, front, back")
+position_parse_llm.improve(on="object_relative_distance", to="only choose from near, far, close, distant")
+
 def parse_position(position_description: str) -> ParsedPosition:
     return position_parse_llm(position_description, output_type=ParsedPosition, random=True)
 
